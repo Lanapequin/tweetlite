@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink: #0f0e0e;
+  --paper: #faf8f5;
+  --cream: #f0ebe2;
+  --accent: #d4541a;
+  --accent-soft: #f7e4d9;
+  --muted: #7a6e64;
+  --border: #e2dbd0;
+  --card: #ffffff;
+  --shadow: 0 1px 3px rgba(15,14,14,0.08), 0 4px 12px rgba(15,14,14,0.04);
+  --shadow-hover: 0 4px 16px rgba(15,14,14,0.14);
+  --radius: 12px;
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+#root { min-height: 100vh; }

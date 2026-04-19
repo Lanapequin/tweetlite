@@ -1,0 +1,87 @@
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(250, 248, 245, 0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 16px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.brand-icon {
+    font-size: 1.2rem;
+    color: var(--accent);
+}
+
+.brand-name {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+}
+
+.header-nav { display: flex; align-items: center; }
+
+.user-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    object-fit: cover;
+}
+
+.user-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.btn-login, .btn-logout {
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.btn-login {
+    background: var(--accent);
+    color: white;
+}
+
+.btn-login:hover { background: #b8461a; }
+
+.btn-logout {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+.btn-logout:hover {
+    background: var(--cream);
+    color: var(--ink);
+}

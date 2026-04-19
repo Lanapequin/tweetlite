@@ -1,0 +1,88 @@
+.composer {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 4px;
+    box-shadow: var(--shadow);
+}
+
+.composer-top {
+    display: flex;
+    gap: 12px;
+}
+
+.composer-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid var(--border);
+    object-fit: cover;
+    margin-top: 2px;
+}
+
+.composer-right { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+
+.composer-textarea {
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: var(--font-body);
+    font-size: 15px;
+    color: var(--ink);
+    background: transparent;
+    line-height: 1.6;
+    caret-color: var(--accent);
+}
+
+.composer-textarea::placeholder { color: var(--muted); }
+
+.composer-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.composer-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.char-count {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    transition: color 0.15s;
+}
+
+.char-count.warn { color: #e6a817; }
+.char-count.over { color: var(--accent); font-weight: 600; }
+
+.composer-error { font-size: 12px; color: var(--accent); }
+
+.btn-post {
+    padding: 8px 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: -0.01em;
+}
+
+.btn-post:hover:not(:disabled) {
+    background: #b8461a;
+    transform: translateY(-1px);
+}
+
+.btn-post:disabled {
+    opacity: 0.4;
+    cursor: default;
+}

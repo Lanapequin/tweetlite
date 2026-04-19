@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:tweetlitedb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://YOUR_AUTH0_DOMAIN/
+          audiences: YOUR_AUTH0_AUDIENCE
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+auth0:
+  domain: YOUR_AUTH0_DOMAIN
+  audience: YOUR_AUTH0_AUDIENCE
+
+cors:
+  allowed-origins: http://localhost:3000,https://YOUR_S3_BUCKET_URL
