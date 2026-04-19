@@ -2,11 +2,10 @@ import React from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import Header from './components/Header';
 import Feed from './components/Feed';
-import LoginPage from './components/LoginPage';
 import './App.css';
 
 function App() {
-  const { isLoading, isAuthenticated, error } = useAuth0();
+  const { isLoading, error } = useAuth0();
 
   if (isLoading) {
     return (
@@ -29,7 +28,7 @@ function App() {
       <div className="app">
         <Header />
         <main className="main-content">
-          {isAuthenticated ? <Feed /> : <LoginPage />}
+          <Feed />
         </main>
       </div>
   );

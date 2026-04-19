@@ -1,379 +1,283 @@
-# TweetLite — Microservices Twitter Clone
+# TweetLite - Monolito + Migracion a Microservicios
 
-**Escuela Colombiana de Ingeniería Julio Garavito**  
-Proyecto: Taller AREP — Arquitecturas Seguras con Microservicios y Auth0
+Proyecto para el taller de Arquitecturas Empresariales: aplicacion tipo Twitter con seguridad JWT usando Auth0, evolucionando de monolito Spring Boot a microservicios en AWS Lambda.
 
----
+## Estado actual real del repositorio
 
-## Descripción
+### Lo que ya cumple
+- Monolito Spring Boot con entidades `User` y `Post`.
+- Endpoints base en monolito:
+  - `GET /api/posts` (publico)
+  - `GET /api/stream` (publico)
+  - `POST /api/posts` (protegido)
+  - `GET /api/me` (protegido)
+- Validacion de longitud maxima de post (140 caracteres).
+- Seguridad como OAuth2 Resource Server (Auth0 + validacion de `audience`).
+- OpenAPI/Swagger configurado con Springdoc.
+- Frontend React con Auth0 (`@auth0/auth0-react`), login/logout, ver stream y crear posts.
 
-TweetLite es una aplicación tipo Twitter simplificada que implementa:
-- Un **stream público único** donde los usuarios autenticados pueden publicar posts de máximo 140 caracteres.
-- Arquitectura que evoluciona de **monolito Spring Boot** a **microservicios serverless en AWS Lambda**.
-- Seguridad completa mediante **Auth0** (JWT, OAuth2 Resource Server).
+### Lo que falta para cumplir 100% la rubrica
+- No hay evidencia de despliegue real en AWS (Lambda/API Gateway/S3) en este repo.
+- No hay evidencia de video demo, links en vivo ni galeria de pruebas.
+- Falta ejecutar y documentar pruebas finales en tu entorno local/AWS.
+- Falta completar configuracion real de Auth0 con datos de tu tenant.
 
----
+## Cambio importante realizado en esta version
 
-## Arquitectura
+Se actualizo `monolith/src/main/resources/application.yml` para usar variables de entorno reales:
+- `AUTH0_DOMAIN`
+- `AUTH0_AUDIENCE`
+- `CORS_ALLOWED_ORIGINS`
 
-### Fase 1 — Monolito
-```
-Browser (React) ──→ Spring Boot Monolith (8080)
-                         ├── /api/stream      [público]
-                         ├── /api/posts GET   [público]
-                         ├── /api/posts POST  [Auth JWT]
-                         ├── /api/me          [Auth JWT]
-                         └── /swagger-ui.html
-                         H2 in-memory DB
-Auth0 ──── JWT validation ──→ Spring Security OAuth2 Resource Server
-```
+Esto evita dejar valores fijos y te permite ejecutar el proyecto con configuracion por entorno.
 
-### Fase 2 — Microservicios en AWS
-```
-                    ┌─────────────────────────────────────┐
-Browser (React)     │           AWS API Gateway            │
-hosted on S3  ────→ │  /users  /posts  /stream            │
-                    └──────┬──────────┬──────────┬────────┘
-                           ↓          ↓          ↓
-                    Lambda         Lambda      Lambda
-                 UserHandler   PostsHandler StreamHandler
-                           ↓          ↓          ↓
-                    DynamoDB    DynamoDB     DynamoDB
-                    (users)     (posts)      (posts-read)
-Auth0 ──── JWT ──→ Validation inside each Lambda handler
-```
+## Variables de entorno explicadas (la duda de `application.yml` linea 23-24)
 
-### Diagrama de flujo Auth0
-```
-User → Login → Auth0 Universal Login
-Auth0 → JWT Access Token → Frontend
-Frontend → Bearer Token → API Gateway / Spring Boot
-Backend → Validate JWT (JWKS endpoint) → 200 / 401
-```
+En Spring Boot, esta parte:
+- `issuer-uri`: URL del tenant Auth0 que emite los tokens.
+- `audiences`: identificador del API en Auth0 (tu audience).
 
----
+Quedo asi:
+- `issuer-uri: https://${AUTH0_DOMAIN:YOUR_AUTH0_DOMAIN}/`
+- `audiences: ${AUTH0_AUDIENCE:YOUR_AUTH0_AUDIENCE}`
 
-## Configuración inicial — Auth0
+Significa:
+- Si exportas `AUTH0_DOMAIN`, usa ese valor.
+- Si no existe, usa el texto por defecto (`YOUR_AUTH0_DOMAIN`) y fallara validacion (esperado en desarrollo si no configuraste Auth0).
 
-### 1. Crear una cuenta en Auth0
-- Ve a https://auth0.com y crea una cuenta gratuita.
+## Paso a paso - Auth0 desde cero
 
-### 2. Crear una SPA Application
-- Dashboard → Applications → Create Application
-- Nombre: `TweetLite Frontend`
-- Tipo: **Single Page Application**
-- En Settings:
-    - **Allowed Callback URLs**: `http://localhost:3000, https://TU_S3_URL`
-    - **Allowed Logout URLs**: `http://localhost:3000, https://TU_S3_URL`
-    - **Allowed Web Origins**: `http://localhost:3000, https://TU_S3_URL`
-- Copia el `Domain` y el `Client ID`.
+1) Crear tenant en [Auth0](https://auth0.com).
+- Ejemplo de dominio: `dev-tu-equipo.us.auth0.com`
 
-### 3. Crear una API en Auth0
-- Dashboard → APIs → Create API
-- Nombre: `TweetLite API`
-- Identifier (Audience): `https://api.tweetlite.com`
-- En Permissions agrega:
-    - `read:posts`
-    - `write:posts`
-    - `read:profile`
+2) Crear API (Resource Server).
+- Auth0 Dashboard -> Applications -> APIs -> Create API
+- Name: `TweetLite API`
+- Identifier (Audience): por ejemplo `https://tweetlite-api`
+- Signing algorithm: `RS256`
 
----
+3) Crear scopes recomendados.
+- `read:posts`
+- `write:posts`
+- `read:profile`
 
-## Ejecución Local
+4) Crear aplicacion SPA para frontend.
+- Applications -> Create Application -> Single Page Application
+- Name: `TweetLite Frontend`
+- Configurar:
+  - Allowed Callback URLs: `http://localhost:3000`
+  - Allowed Logout URLs: `http://localhost:3000`
+  - Allowed Web Origins: `http://localhost:3000`
 
-### Pre-requisitos
+5) Copiar y guardar:
+- Domain del tenant
+- Client ID de la SPA
+- Audience del API
+
+## Ejecucion local (monolito + frontend)
+
+### Requisitos
 - Java 17+
 - Maven 3.8+
 - Node.js 18+
 - npm 9+
 
-### 1. Monolito Spring Boot
+### 1) Backend monolito
 
 ```bash
 cd monolith
-
-# Edita application.yml con tus credenciales Auth0
-# auth0.domain: tu-tenant.auth0.com
-# auth0.audience: https://api.tweetlite.com
-
+export AUTH0_DOMAIN=dev-tu-equipo.us.auth0.com
+export AUTH0_AUDIENCE=https://tweetlite-api
+export CORS_ALLOWED_ORIGINS=http://localhost:3000
 mvn spring-boot:run
 ```
 
-Disponible en: http://localhost:8080  
-Swagger UI: http://localhost:8080/swagger-ui.html  
-H2 Console: http://localhost:8080/h2-console
+URLs:
+- API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- H2: `http://localhost:8080/h2-console`
 
-### 2. Frontend React
+### 2) Frontend
 
 ```bash
 cd frontend
 cp .env.example .env
+```
 
-# Edita .env:
-# REACT_APP_AUTH0_DOMAIN=tu-tenant.auth0.com
-# REACT_APP_AUTH0_CLIENT_ID=tu_client_id
-# REACT_APP_AUTH0_AUDIENCE=https://api.tweetlite.com
-# REACT_APP_API_URL=http://localhost:8080
+Editar `.env`:
 
+```env
+REACT_APP_AUTH0_DOMAIN=dev-tu-equipo.us.auth0.com
+REACT_APP_AUTH0_CLIENT_ID=TU_CLIENT_ID
+REACT_APP_AUTH0_AUDIENCE=https://tweetlite-api
+REACT_APP_API_URL=http://localhost:8080
+```
+
+Ejecutar:
+
+```bash
 npm install
 npm start
 ```
 
-Disponible en: http://localhost:3000
+URL:
+- `http://localhost:3000`
 
----
+## Verificacion funcional minima
 
-## Despliegue en AWS
+1) Sin login:
+- `GET /api/stream` responde 200.
 
-### A) Frontend en S3
+2) Con login:
+- Crear post desde frontend.
+- Validar que aparezca en stream.
+
+3) Probar endpoint protegido:
+- `GET /api/me` con token valido responde 200.
+- sin token responde 401.
+
+4) Swagger:
+- abrir `swagger-ui.html`.
+- usar `Authorize` con un JWT valido.
+
+## Microservicios implementados en codigo
+
+### Estructura objetivo requerida
+
+```text
+microservices/
+  posts-service/
+    src/main/java/.../PostsHandler.java
+    src/main/java/.../JwtValidator.java
+  users-service/
+    src/main/java/.../UserHandler.java
+    src/main/java/.../JwtValidator.java (o libreria compartida)
+  stream-service/
+    src/main/java/.../StreamHandler.java
+```
+
+Estado actual:
+- `posts-service`: `PostsHandler` (`GET /posts`, `POST /posts`) + `JwtValidator`.
+- `users-service`: `UserHandler` (`GET /me`) + `JwtValidator`.
+- `stream-service`: `StreamHandler` (`GET /stream`) publico.
+- `UserHandler` ya no esta mezclado dentro de `posts-service`.
+- Cada microservicio ya tiene su `pom.xml` y empaquetado para Lambda.
+
+## Despliegue AWS - guia practica
+
+### 1) AWS CLI
+
+```bash
+aws configure
+aws sts get-caller-identity
+```
+
+### 2) DynamoDB
+
+```bash
+aws dynamodb create-table \
+  --table-name twitter-posts \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+
+aws dynamodb create-table \
+  --table-name twitter-users \
+  --attribute-definitions AttributeName=auth0Id,AttributeType=S \
+  --key-schema AttributeName=auth0Id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+```
+
+### 3) Compilar cada microservicio
+
+```bash
+cd microservices/posts-service && mvn clean package && cd ../..
+cd microservices/users-service && mvn clean package && cd ../..
+cd microservices/stream-service && mvn clean package && cd ../..
+```
+
+### 4) Crear Lambdas
+
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+aws lambda create-function \
+  --function-name tweetlite-posts \
+  --runtime java17 \
+  --handler co.edu.escuelaing.PostsHandler::handleRequest \
+  --zip-file fileb://microservices/posts-service/target/posts-service-1.0-SNAPSHOT.jar \
+  --role arn:aws:iam::$ACCOUNT_ID:role/LabRole \
+  --timeout 30 \
+  --memory-size 512 \
+  --environment "Variables={POSTS_TABLE=twitter-posts,AUTH0_DOMAIN=dev-tu-equipo.us.auth0.com,AUTH0_AUDIENCE=https://tweetlite-api}"
+```
+
+Crear de forma similar:
+
+```bash
+aws lambda create-function \
+  --function-name tweetlite-users \
+  --runtime java17 \
+  --handler co.edu.escuelaing.UserHandler::handleRequest \
+  --zip-file fileb://microservices/users-service/target/users-service-1.0-SNAPSHOT.jar \
+  --role arn:aws:iam::$ACCOUNT_ID:role/LabRole \
+  --timeout 30 \
+  --memory-size 512 \
+  --environment "Variables={USERS_TABLE=twitter-users,AUTH0_DOMAIN=dev-tu-equipo.us.auth0.com,AUTH0_AUDIENCE=https://tweetlite-api}"
+
+aws lambda create-function \
+  --function-name tweetlite-stream \
+  --runtime java17 \
+  --handler co.edu.escuelaing.StreamHandler::handleRequest \
+  --zip-file fileb://microservices/stream-service/target/stream-service-1.0-SNAPSHOT.jar \
+  --role arn:aws:iam::$ACCOUNT_ID:role/LabRole \
+  --timeout 30 \
+  --memory-size 512 \
+  --environment "Variables={POSTS_TABLE=twitter-posts}"
+```
+
+### 5) API Gateway
+
+Configurar rutas:
+- `GET /posts` -> posts lambda (publico)
+- `POST /posts` -> posts lambda (jwt)
+- `GET /stream` -> stream lambda (publico)
+- `GET /me` -> users lambda (jwt)
+
+Habilitar CORS y desplegar stage `prod`.
+
+### 6) Frontend en S3
 
 ```bash
 cd frontend
 npm run build
-
-# Crear bucket S3
-aws s3 mb s3://tweetlite-frontend-TUUNIQUEID
-
-# Habilitar static website hosting
-aws s3 website s3://tweetlite-frontend-TUUNIQUEID \
-  --index-document index.html \
-  --error-document index.html
-
-# Política pública del bucket (guarda como policy.json)
-cat > policy.json << 'EOF'
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Sid": "PublicReadGetObject",
-    "Effect": "Allow",
-    "Principal": "*",
-    "Action": "s3:GetObject",
-    "Resource": "arn:aws:s3:::tweetlite-frontend-TUUNIQUEID/*"
-  }]
-}
-EOF
-
-aws s3api put-bucket-policy \
-  --bucket tweetlite-frontend-TUUNIQUEID \
-  --policy file://policy.json
-
-# Subir build
-aws s3 sync build/ s3://tweetlite-frontend-TUUNIQUEID --delete
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+BUCKET=tweetlite-$ACCOUNT_ID
+aws s3 mb s3://$BUCKET --region us-east-1
+aws s3 website s3://$BUCKET --index-document index.html --error-document index.html
+aws s3 sync build/ s3://$BUCKET --delete
+echo "http://$BUCKET.s3-website-us-east-1.amazonaws.com"
 ```
 
-URL: `http://tweetlite-frontend-TUUNIQUEID.s3-website-us-east-1.amazonaws.com`
+Para Auth0 en produccion, usar HTTPS (CloudFront o dominio propio) y registrar esa URL en Allowed Callback/Logout/Web Origins.
 
-### B) Tablas DynamoDB
+## Checklist de entrega final (rubrica)
 
-```bash
-# Tabla de posts
-aws dynamodb create-table \
-  --table-name TweetLitePosts \
-  --attribute-definitions AttributeName=id,AttributeType=S \
-  --key-schema AttributeName=id,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
+- [x] Monolito con endpoints principales y seguridad Auth0.
+- [x] Swagger/OpenAPI accesible.
+- [x] Frontend con login/logout y creacion de posts.
+- [x] Refactor completo a 3 microservicios independientes (en codigo).
+- [ ] Despliegue real en Lambda + API Gateway.
+- [ ] Frontend publicado en S3 (idealmente HTTPS con CloudFront).
+- [x] README tecnico con pasos completos de ejecucion/despliegue.
+- [ ] README final con links reales, evidencias y pruebas de ejecucion.
+- [ ] Video demo 5-8 minutos.
 
-# Tabla de usuarios
-aws dynamodb create-table \
-  --table-name TweetLiteUsers \
-  --attribute-definitions AttributeName=auth0Id,AttributeType=S \
-  --key-schema AttributeName=auth0Id,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
-```
+## Seguridad y buenas practicas
 
-### C) Microservicio Posts — Lambda
-
-```bash
-cd microservices/posts-service
-mvn package
-
-# Crear función Lambda
-aws lambda create-function \
-  --function-name TweetLitePostsService \
-  --runtime java17 \
-  --handler co.edu.escuelaing.PostsHandler::handleRequest \
-  --role arn:aws:iam::TU_ACCOUNT_ID:role/LabRole \
-  --zip-file fileb://target/posts-service-1.0-SNAPSHOT.jar \
-  --timeout 30 \
-  --memory-size 512 \
-  --environment Variables="{POSTS_TABLE=TweetLitePosts,AUTH0_DOMAIN=tu-tenant.auth0.com,AUTH0_AUDIENCE=https://api.tweetlite.com}"
-```
-
-### D) Microservicio Users — Lambda
-
-```bash
-cd microservices/user-service
-mvn package
-
-aws lambda create-function \
-  --function-name TweetLiteUserService \
-  --runtime java17 \
-  --handler co.edu.escuelaing.UserHandler::handleRequest \
-  --role arn:aws:iam::TU_ACCOUNT_ID:role/LabRole \
-  --zip-file fileb://target/user-service-1.0-SNAPSHOT.jar \
-  --timeout 30 \
-  --memory-size 512 \
-  --environment Variables="{USERS_TABLE=TweetLiteUsers,AUTH0_DOMAIN=tu-tenant.auth0.com,AUTH0_AUDIENCE=https://api.tweetlite.com}"
-```
-
-### E) API Gateway
-
-1. Abre AWS Console → API Gateway → Create API → REST API → New API
-2. Nombre: `TweetLiteAPI` → Regional
-3. Crea los recursos:
-    - `/posts` → Methods: GET (PostsHandler), POST (PostsHandler), OPTIONS
-    - `/stream` → Method: GET (PostsHandler), OPTIONS
-    - `/users/me` → Method: GET (UserHandler), OPTIONS
-4. Para cada método Lambda:
-    - Integration type: Lambda Function
-    - Use Lambda Proxy integration: 
-5. En **Integration Request** de POST /posts:
-    - Ya que usamos proxy, el JWT llega directo al handler
-6. Deploy → New Stage → `prod`
-
-Para CORS en cada recurso:
-- Actions → Enable CORS → Yes
-
-URL final: `https://XXXXX.execute-api.us-east-1.amazonaws.com/prod`
-
----
-
-## Pruebas
-
-### Pruebas unitarias del monolito
-
-```bash
-cd monolith
-mvn test
-```
-
-**Casos cubiertos:**
-- `GET /api/stream` sin autenticación → 200 
-- `POST /api/posts` sin token → 401 
-- `POST /api/posts` con JWT válido → 200 
-- `POST /api/posts` con contenido >140 chars → 400
-- `GET /api/me` sin token → 401
-- `GET /api/me` con JWT válido → 200
-
-### Pruebas con curl
-
-```bash
-# 1. Stream público (sin auth)
-curl http://localhost:8080/api/stream
-
-# 2. Crear post sin auth (debe fallar)
-curl -X POST http://localhost:8080/api/posts \
-  -H "Content-Type: application/json" \
-  -d '{"content":"test"}'
-# → 401 Unauthorized
-
-# 3. Obtener token de Auth0 (para pruebas manuales)
-# Ve a Auth0 Dashboard → APIs → TweetLite API → Test → Copy Token
-
-TOKEN="eyJ..."
-
-# 4. Crear post con auth
-curl -X POST http://localhost:8080/api/posts \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"content":"Hola desde TweetLite!"}'
-
-# 5. Mi perfil
-curl http://localhost:8080/api/me \
-  -H "Authorization: Bearer $TOKEN"
-
-# 6. Post muy largo (debe fallar)
-curl -X POST http://localhost:8080/api/posts \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"content":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}'
-# → 400 Bad Request
-```
-
-### Pruebas de las Lambdas en AWS Console
-
-Para cada función Lambda:
-1. AWS Console → Lambda → Test
-2. Usa los templates de **API Gateway Proxy**
-3. Para GET `/posts`: deja el body vacío, sin Authorization
-4. Para POST `/posts`: añade `"Authorization": "Bearer TOKEN"` en headers y body con content
-
----
-
-## Estructura del repositorio
-
-```
-tweetlite/
-├── monolith/
-│   ├── pom.xml
-│   └── src/
-│       ├── main/java/co/edu/escuelaing/tweetlite/
-│       │   ├── TweetliteApplication.java
-│       │   ├── config/
-│       │   │   ├── SecurityConfig.java
-│       │   │   ├── AudienceValidator.java
-│       │   │   └── OpenApiConfig.java
-│       │   ├── controller/
-│       │   │   ├── PostController.java
-│       │   │   └── UserController.java
-│       │   ├── dto/
-│       │   ├── model/
-│       │   ├── repository/
-│       │   └── service/
-│       └── test/
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Header.js / .css
-│   │   │   ├── Feed.js / .css
-│   │   │   ├── PostCard.js / .css
-│   │   │   ├── PostComposer.js / .css
-│   │   │   └── LoginPage.js / .css
-│   │   ├── App.js / .css
-│   │   └── index.js
-│   ├── .env.example
-│   └── package.json
-├── microservices/
-│   ├── posts-service/
-│   │   ├── pom.xml
-│   │   └── src/main/java/co/edu/escuelaing/
-│   │       ├── PostsHandler.java
-│   │       └── JwtValidator.java
-│   ├── user-service/
-│   │   ├── pom.xml
-│   │   └── src/main/java/co/edu/escuelaing/
-│   │       └── UserHandler.java
-│   └── stream-service/
-│       ├── pom.xml
-│       └── src/main/java/co/edu/escuelaing/
-│           └── StreamHandler.java
-└── README.md
-```
-
----
-
-## Links
-
-- Frontend en S3: `http://tweetlite-frontend-TUUNIQUEID.s3-website-us-east-1.amazonaws.com`
-- Swagger UI (monolito local): `http://localhost:8080/swagger-ui.html`
-- Video demo:
-
----
-
-## Notas de seguridad
-
-- **No** subir al repositorio: `.env`, claves de AWS, secrets de Auth0
-- Usar variables de entorno o AWS Secrets Manager para credenciales
-- El LabRole de AWS Academy ya tiene permisos para Lambda, DynamoDB y S3
-- Los JWT son validados en cada Lambda sin estado compartido
-
----
-
-## Integrantes
-
-| Nombre                          | GitHub |
-|---------------------------------|--------|
-| Daniel Esteban Rodriguez Suarez | [@usuario] |
-| Tomas Espitia                   | [@] |
-| Laura Natalia Perilla Quintero  | [@] |
+- No subir `.env`, secretos ni tokens al repo.
+- Usar variables de entorno para `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `CLIENT_ID`.
+- Validar JWT siempre por issuer + audience.
+- Mantener endpoints publicos y protegidos segun la rubrica.

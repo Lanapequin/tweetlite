@@ -5,7 +5,7 @@ import PostCard from './PostCard';
 import './Feed.css';
 
 export default function Feed() {
-    const { getAccessTokenSilently } = useAuth0();
+    const { getAccessTokenSilently, isAuthenticated, loginWithRedirect } = useAuth0();
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
@@ -51,7 +51,16 @@ export default function Feed() {
 
     return (
         <div className="feed">
-            <PostComposer onPost={handleNewPost} />
+            {isAuthenticated ? (
+                <PostComposer onPost={handleNewPost} />
+            ) : (
+                <div className="feed-empty">
+                    <p>You are viewing the public stream.</p>
+                    <button className="load-more" onClick={() => loginWithRedirect()}>
+                        Sign in to create a post
+                    </button>
+                </div>
+            )}
 
             <div className="feed-divider">
                 <span className="divider-label">Public Stream</span>

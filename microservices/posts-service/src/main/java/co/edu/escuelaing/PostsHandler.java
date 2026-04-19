@@ -67,8 +67,7 @@ public class PostsHandler implements RequestHandler<APIGatewayProxyRequestEvent,
     }
 
     private APIGatewayProxyResponseEvent handlePost(APIGatewayProxyRequestEvent event, Map<String, String> headers) throws Exception {
-        // Validate JWT
-        String authHeader = event.getHeaders() != null ? event.getHeaders().get("Authorization") : null;
+        String authHeader = readAuthHeader(event);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return error(401, "Unauthorized", headers);
         }
@@ -112,9 +111,20 @@ public class PostsHandler implements RequestHandler<APIGatewayProxyRequestEvent,
         result.put("createdAt", now);
 
         return new APIGatewayProxyResponseEvent()
-                .withStatusCode(200)
+                .withStatusCode(201)
                 .withHeaders(headers)
                 .withBody(mapper.writeValueAsString(result));
+    }
+
+    private String readAuthHeader(APIGatewayProxyRequestEvent event) {
+        if (event.getHeaders() == null) {
+            return null;
+        }
+        String auth = event.getHeaders().get("Authorization");
+        if (auth == null) {
+            auth = event.getHeaders().get("authorization");
+        }
+        return auth;
     }
 
     private APIGatewayProxyResponseEvent error(int code, String msg, Map<String, String> headers) {
