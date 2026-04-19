@@ -55,6 +55,7 @@ Significa:
 - Name: `TweetLite API`
 - Identifier (Audience): por ejemplo `https://tweetlite-api`
 - Signing algorithm: `RS256`
+- Importante: copia el Identifier exactamente igual (sin cambiar slash final).
 
 3) Crear scopes recomendados.
 - `read:posts`
@@ -74,6 +75,12 @@ Significa:
 - Client ID de la SPA
 - Audience del API
 
+6) Autorizar la SPA contra tu API (esto corrige el error de "client is not authorized").
+- En Auth0: `Applications -> APIs -> TweetLite API -> Applications`
+- Busca tu SPA (`TweetLite Frontend`) y habilitala (Authorize/Toggle ON).
+- Si no haces esto, al oprimir Sign in aparece:
+  - `Client "<client_id>" is not authorized to access resource server "<audience>"`
+
 ## Ejecucion local (monolito + frontend)
 
 ### Requisitos
@@ -86,7 +93,7 @@ Significa:
 
 ```bash
 cd monolith
-export AUTH0_DOMAIN=dev-tu-equipo.us.auth0.com
+export AUTH0_DOMAIN=dev-wtyv3mytuxckqffv.us.auth0.com
 export AUTH0_AUDIENCE=https://tweetlite-api
 export CORS_ALLOWED_ORIGINS=http://localhost:3000
 mvn spring-boot:run
@@ -94,7 +101,7 @@ mvn spring-boot:run
 
 URLs:
 - API: `http://localhost:8080`
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Swagger UI: `http://localhost:8080/swagger-ui.html` o `http://localhost:8080/swagger-ui/index.html`
 - H2: `http://localhost:8080/h2-console`
 
 ### 2) Frontend
@@ -107,8 +114,8 @@ cp .env.example .env
 Editar `.env`:
 
 ```env
-REACT_APP_AUTH0_DOMAIN=dev-tu-equipo.us.auth0.com
-REACT_APP_AUTH0_CLIENT_ID=TU_CLIENT_ID
+REACT_APP_AUTH0_DOMAIN=dev-wtyv3mytuxckqffv.us.auth0.com
+REACT_APP_AUTH0_CLIENT_ID=Mr2Tjbd41ZOZP5XKfzMwFcqkLncUGnmW
 REACT_APP_AUTH0_AUDIENCE=https://tweetlite-api
 REACT_APP_API_URL=http://localhost:8080
 ```
@@ -139,6 +146,75 @@ URL:
 4) Swagger:
 - abrir `swagger-ui.html`.
 - usar `Authorize` con un JWT valido.
+
+## Pruebas paso a paso (muy claro)
+
+Puedes probar con **Swagger**, **Postman** o **curl**. Recomendacion:
+- Swagger: rapido para validar endpoints.
+- Postman: evidencia bonita para capturas.
+- curl: evidencia tecnica en consola.
+
+### A) Pruebas en Swagger
+1. Abre `http://localhost:8080/swagger-ui/index.html`.
+2. Verifica que cargue la documentacion (si no carga, revisa seccion "Problemas comunes").
+3. Prueba publico:
+   - `GET /api/stream` -> debe responder `200`.
+4. Prueba protegido sin token:
+   - `POST /api/posts` -> debe responder `401`.
+5. Haz login en frontend (`http://localhost:3000`) y obtén token.
+6. En Swagger pulsa `Authorize` y pega `Bearer <TOKEN>`.
+7. Prueba protegido con token:
+   - `POST /api/posts` con body `{"content":"hola"}` -> `200`/`201` segun endpoint.
+   - `GET /api/me` -> `200`.
+
+### B) Pruebas en Postman
+Coleccion sugerida:
+- `GET http://localhost:8080/api/stream` (sin auth) -> `200`.
+- `POST http://localhost:8080/api/posts` (sin auth) -> `401`.
+- `POST http://localhost:8080/api/posts` (Bearer token) -> `200` o `201`.
+- `GET http://localhost:8080/api/me` (Bearer token) -> `200`.
+- `POST /api/posts` con >140 chars -> `400`.
+
+### C) Pruebas por curl
+```bash
+# Publico
+curl -i http://localhost:8080/api/stream
+
+# Protegido sin token
+curl -i -X POST http://localhost:8080/api/posts \
+  -H "Content-Type: application/json" \
+  -d '{"content":"hola"}'
+
+# Protegido con token
+TOKEN="pega_aqui_tu_jwt"
+curl -i -X POST http://localhost:8080/api/posts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"hola con auth"}'
+
+curl -i http://localhost:8080/api/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## Problemas comunes y solucion
+
+### 1) Error Auth0: client not authorized to access resource server
+Mensaje:
+- `Client "<client_id>" is not authorized to access resource server "<audience>"`
+
+Causa:
+- La SPA no fue autorizada para consumir tu API en Auth0, o el Audience no coincide exactamente.
+
+Solucion:
+- Autoriza la SPA en `Auth0 -> APIs -> TweetLite API -> Applications`.
+- Verifica que `REACT_APP_AUTH0_AUDIENCE` sea exactamente igual al Identifier del API.
+- Reinicia frontend (`npm start`) despues de cambiar `.env`.
+
+### 2) Swagger no abre en /swagger-ui.html
+Si ves pantalla en blanco o 401:
+- Usa `http://localhost:8080/swagger-ui/index.html`.
+- Asegurate que el backend sigue corriendo.
+- Verifica `http://localhost:8080/api-docs` (debe responder JSON `200`).
 
 ## Microservicios implementados en codigo
 
