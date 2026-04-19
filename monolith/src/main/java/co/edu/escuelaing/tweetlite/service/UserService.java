@@ -18,10 +18,43 @@ public class UserService {
                 .orElseGet(() -> {
                     User user = new User();
                     user.setAuth0Id(auth0Id);
-                    user.setEmail(jwt.getClaimAsString("email"));
-                    user.setName(jwt.getClaimAsString("name"));
+                    user.setEmail(resolveEmail(jwt));
+                    user.setName(resolveName(jwt));
                     user.setPicture(jwt.getClaimAsString("picture"));
                     return userRepository.save(user);
                 });
+    }
+
+    private String resolveEmail(Jwt jwt) {
+        String email = jwt.getClaimAsString("email");
+        if (email != null && !email.isBlank()) {
+            return email;
+        }
+        String preferred = jwt.getClaimAsString("preferred_username");
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred.contains("@") ? preferred : preferred + "@users.auth0.local";
+        }
+        String nickname = jwt.getClaimAsString("nickname");
+        if (nickname != null && !nickname.isBlank()) {
+            return nickname.contains("@") ? nickname : nickname + "@users.auth0.local";
+        }
+        return jwt.getSubject().replace("|", "_") + "@users.auth0.local";
+    }
+
+    private String resolveName(Jwt jwt) {
+        String name = jwt.getClaimAsString("name");
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        String nickname = jwt.getClaimAsString("nickname");
+        if (nickname != null && !nickname.isBlank()) {
+            return nickname;
+        }
+        String given = jwt.getClaimAsString("given_name");
+        String family = jwt.getClaimAsString("family_name");
+        if ((given != null && !given.isBlank()) || (family != null && !family.isBlank())) {
+            return ((given != null ? given : "") + " " + (family != null ? family : "")).trim();
+        }
+        return "User";
     }
 }

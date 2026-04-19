@@ -38,7 +38,11 @@ export default function Feed() {
             },
             body: JSON.stringify({ content }),
         });
-        if (!res.ok) throw new Error('Failed to post');
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            console.error('POST /api/posts failed', res.status, text);
+            throw new Error(`Failed to post (${res.status})`);
+        }
         const newPost = await res.json();
         setPosts(prev => [newPost, ...prev]);
     };
