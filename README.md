@@ -10,36 +10,83 @@ TweetLite permite a usuarios autenticados publicar mensajes cortos (máximo 140 
 
 ---
 
-## Arquitectura final
+## Arquitectura
 
-```
-[Usuario] 
-    │
-    ▼
-[https://tweetlite.duckdns.org]   ← EC2 (Amazon Linux) + Caddy (HTTPS reverse proxy)
-    │
-    ▼
-[S3 Static Website]               ← Frontend React (Create React App)
-    │
-    ▼
-[Auth0]                           ← Login / Logout / JWT tokens
-    │
-    ▼
-[API Gateway HTTP API]            ← https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod
-    │
-    ├── GET  /api/stream   ──►  Lambda: tweetlite-stream   ──►  DynamoDB: twitter-posts
-    ├── GET  /api/posts    ──►  Lambda: tweetlite-posts    ──►  DynamoDB: twitter-posts
-    ├── POST /api/posts    ──►  Lambda: tweetlite-posts    ──►  DynamoDB: twitter-posts
-    └── GET  /api/me       ──►  Lambda: tweetlite-users    ──►  DynamoDB: twitter-users
+El sistema tiene **dos fases** que la rúbrica pide evidenciar: (1) monolito Spring Boot en local y (2) microservicios serverless en AWS. El frontend y Auth0 son comunes a ambas; cambia solo el “backend” que atiende el `REACT_APP_API_URL`.
+
+### Fase 1 — Monolito (desarrollo local)
+
+```mermaid
+flowchart LR
+  Browser[Navegador]
+  React[React SPA\nlocalhost:3000]
+  Monolith[Spring Boot\nlocalhost:8080]
+  Auth0[Auth0]
+  H2[(H2 en memoria)]
+
+  Browser --> React
+  React -->|login| Auth0
+  React -->|GET/POST /api/*\nBearer JWT si aplica| Monolith
+  Monolith -->|valida JWT\nissuer + audience| Auth0
+  Monolith --> H2
 ```
 
-**Flujo de seguridad:**
-1. El usuario inicia sesión en el frontend con Auth0.
-2. Auth0 emite un JWT (access token) con audience `https://tweetlite-api`.
-3. El frontend envía el token en el header `Authorization: Bearer <token>`.
-4. Cada Lambda valida el JWT internamente usando `JwtValidator` (verifica issuer + audience + firma RS256).
-5. Endpoints públicos (`GET /stream`, `GET /posts`) no requieren token.
-6. Endpoints protegidos (`POST /posts`, `GET /me`) retornan 401 si no hay token válido.
+Rutas típicas del monolito (todas bajo prefijo **`/api`**):
+
+| Método | Ruta | Auth |
+|--------|------|------|
+| GET | `/api/posts`, `/api/stream` | Pública |
+| POST | `/api/posts` | JWT |
+| GET | `/api/me` | JWT |
+
+Documentación OpenAPI/Swagger: `http://localhost:8080/swagger-ui/index.html`.
+
+### Fase 2 — Producción (S3 + HTTPS + API Gateway + Lambda + DynamoDB)
+
+El frontend estático vive en **S3**; delante suele haber **HTTPS** (por ejemplo DuckDNS + Caddy en EC2) para que Auth0 acepte el origen. El API expuesto a Internet es **API Gateway**; cada ruta invoca una **Lambda** Java; el estado se guarda en **DynamoDB**.
+
+```mermaid
+flowchart TB
+  User[Navegador]
+  HTTPS[HTTPS\nDuckDNS + Caddy]
+  S3[S3\nsitio estático React]
+  Auth0[Auth0]
+  APIGW[API Gateway\nHTTP API]
+  LPosts[Lambda\ntweetlite-posts]
+  LStream[Lambda\ntweetlite-stream]
+  LUsers[Lambda\ntweetlite-users]
+  DPosts[(DynamoDB\ntwitter-posts)]
+  DUsers[(DynamoDB\ntwitter-users)]
+
+  User --> HTTPS --> S3
+  User -->|login| Auth0
+  S3 -->|API REST| APIGW
+  APIGW --> LStream
+  APIGW --> LPosts
+  APIGW --> LUsers
+  LStream --> DPosts
+  LPosts --> DPosts
+  LUsers --> DUsers
+  LPosts -->|JWT RS256| Auth0
+  LUsers -->|JWT RS256| Auth0
+```
+
+En el despliegue actual del equipo, las rutas en API Gateway están montadas con el mismo prefijo que el monolito (ejemplo base: `https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod`):
+
+| Método | Ruta (tras el stage `/prod`) | Lambda | Auth |
+|--------|------------------------------|--------|------|
+| GET | `/api/stream` | tweetlite-stream | Pública |
+| GET | `/api/posts` | tweetlite-posts | Pública |
+| POST | `/api/posts` | tweetlite-posts | JWT |
+| GET | `/api/me` | tweetlite-users | JWT |
+
+### Flujo de seguridad (Auth0 + JWT)
+
+1. El usuario inicia sesión en el SPA; Auth0 devuelve un **access token** (JWT) con audience `https://tweetlite-api`.
+2. El frontend envía `Authorization: Bearer <token>` en las peticiones protegidas.
+3. **Monolito:** Spring Security OAuth2 Resource Server valida el JWT (JWKS de Auth0 + audience).
+4. **Lambdas:** `JwtValidator` valida firma RS256, `iss` y `aud` contra las variables `AUTH0_DOMAIN` y `AUTH0_AUDIENCE`.
+5. Sin token válido, `POST` de creación y `GET /api/me` responden **401**.
 
 ---
 
@@ -58,24 +105,45 @@ TweetLite permite a usuarios autenticados publicar mensajes cortos (máximo 140 
 
 ```
 tweetlite/
-├── monolith/                         # Spring Boot monolito
-│   └── src/main/java/co/edu/escuelaing/
-├── microservices/
-│   ├── posts-service/                # Lambda: GET y POST /posts
+├── README.md
+├── images/                              # Capturas para documentación / evidencias
+├── monolith/                            # Fase 1: Spring Boot 3.2 + JPA + OAuth2 Resource Server + OpenAPI
+│   ├── pom.xml
+│   └── src/
+│       ├── main/
+│       │   ├── java/co/edu/escuelaing/tweetlite/
+│       │   │   ├── TweetliteApplication.java
+│       │   │   ├── config/            # SecurityConfig, AudienceValidator, OpenApiConfig
+│       │   │   ├── controller/        # PostController, UserController
+│       │   │   ├── dto/               # PostRequest, PostResponse, UserResponse
+│       │   │   ├── model/             # User, Post (JPA)
+│       │   │   ├── repository/
+│       │   │   └── service/           # PostService, UserService
+│       │   └── resources/
+│       │       └── application.yml
+│       └── test/java/co/edu/escuelaing/tweetlite/
+│           └── PostControllerTest.java
+├── microservices/                       # Fase 2: tres Lambdas Java (API Gateway)
+│   ├── posts-service/
+│   │   ├── pom.xml
 │   │   └── src/main/java/co/edu/escuelaing/
-│   │       ├── PostsHandler.java
+│   │       ├── PostsHandler.java        # GET/POST posts (JWT en POST)
 │   │       └── JwtValidator.java
-│   ├── users-service/                # Lambda: GET /me
+│   ├── users-service/
+│   │   ├── pom.xml
 │   │   └── src/main/java/co/edu/escuelaing/
-│   │       ├── UserHandler.java
+│   │       ├── UserHandler.java         # GET perfil (/me)
 │   │       └── JwtValidator.java
-│   └── stream-service/               # Lambda: GET /stream (público)
+│   └── stream-service/
+│       ├── pom.xml
 │       └── src/main/java/co/edu/escuelaing/
-│           └── StreamHandler.java
-└── frontend/                         # React + Auth0 SDK
+│           └── StreamHandler.java       # GET stream público
+└── frontend/                            # React 18 (CRA) + @auth0/auth0-react
+    ├── package.json
+    ├── public/
     ├── src/
-    ├── .env
-    └── build/                        # Output del build (desplegado en S3)
+    ├── .env                             # local (no versionar secretos)
+    └── build/                           # salida de npm run build → sync a S3
 ```
 
 ---
@@ -147,6 +215,17 @@ npm start
 ```
 
 URL: `http://localhost:3000`
+
+### Pruebas automatizadas del monolito
+
+Desde la carpeta `monolith`:
+
+```cmd
+cd monolith
+mvn test
+```
+
+Deberías ver **7 tests** en `PostControllerTest` y `BUILD SUCCESS`. Los tests usan `@MockBean` para `PostService`, `UserService` y `JwtDecoder` (así no se llama a Auth0 al levantar el contexto). Si compilas con **Java 23**, el `pom.xml` ya incluye la opción `-Dnet.bytebuddy.experimental=true` en Surefire para que Mockito/Byte Buddy funcione; para la asignatura se recomienda igualmente **Java 17** como versión del proyecto.
 
 ### Variables de entorno del frontend (`frontend/.env`)
 
