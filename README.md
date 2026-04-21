@@ -272,78 +272,59 @@ REACT_APP_API_URL=http://localhost:8080
 ---
 
 ## Full AWS deployment (PowerShell — Windows)
-
+ 
 ### Prerequisites
-
+ 
 - AWS CLI installed (`aws --version`)
 - Lab credentials configured (see step 1)
 - Java 17 and Maven installed
 - Node.js 18+ installed
-
 ---
-
+ 
 ### Step 1 — Configure AWS credentials
-
-In AWS Academy / Learner Lab, when the session starts you will see the **"AWS Details"** or **"Show"** button next to "AWS CLI". Copy the credentials and paste them into the credentials file:
-
+ 
+In AWS Academy / Learner Lab, click **"AWS Details"** -> **"Show"** next to "AWS CLI". Copy the credentials and paste them:
+ 
 ```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.aws"
+New-Item -ItemType File -Force -Path "$env:USERPROFILE\.aws\credentials"
 notepad "$env:USERPROFILE\.aws\credentials"
 ```
-
-The file should look like this (replace with your current session values):
-
+ 
 ```
 [default]
 aws_access_key_id=YOUR_ACCESS_KEY_ID
 aws_secret_access_key=YOUR_SECRET_ACCESS_KEY
 aws_session_token=YOUR_SESSION_TOKEN
 ```
-
-> **Important:** Lab credentials expire when the session ends. Every time you reopen the lab, you must update this file with the new credentials.
-
-Verify they work:
-
+ 
+> **Important:** Lab credentials expire when the session ends. Every time you reopen the lab you must update this file with the new credentials.
+ 
+Verify:
+ 
 ```powershell
 aws sts get-caller-identity
 ```
-
-Expected response:
-
-```json
-{
-    "UserId": "...",
-    "Account": "962733155713",
-    "Arn": "arn:aws:sts::962733155713:assumed-role/voclabs/..."
-}
-```
-
+ 
 ---
-
+ 
 ### Step 2 — Define environment variables in PowerShell
-
-Run this full block in the same PowerShell window you will use during deployment. If you close the window, run it again:
-
+ 
 ```powershell
 $REGION = "us-east-1"
-$AUTH0_DOMAIN = "dev-wtyv3mytuxckqffv.us.auth0.com"
+$AUTH0_DOMAIN = "dev-g5mngajmk4cmyq55.us.auth0.com"
 $AUTH0_AUDIENCE = "https://tweetlite-api"
 $POSTS_TABLE = "twitter-posts"
 $USERS_TABLE = "twitter-users"
 $ACCOUNT_ID = (aws sts get-caller-identity --query Account --output text)
 $LAMBDA_ROLE_ARN = "arn:aws:iam::" + $ACCOUNT_ID + ":role/LabRole"
+$BUCKET = "tweetlite-" + $ACCOUNT_ID
 ```
-
-Verify everything is set correctly:
-
-```powershell
-echo $ACCOUNT_ID         # 962733155713
-echo $LAMBDA_ROLE_ARN    # arn:aws:iam::962733155713:role/LabRole
-```
-
+ 
 ---
-
+ 
 ### Step 3 — Create DynamoDB tables
-
+ 
 ```powershell
 aws dynamodb create-table `
   --table-name $POSTS_TABLE `
@@ -351,7 +332,7 @@ aws dynamodb create-table `
   --key-schema AttributeName=id,KeyType=HASH `
   --billing-mode PAY_PER_REQUEST `
   --region $REGION
-
+ 
 aws dynamodb create-table `
   --table-name $USERS_TABLE `
   --attribute-definitions AttributeName=auth0Id,AttributeType=S `
@@ -359,49 +340,35 @@ aws dynamodb create-table `
   --billing-mode PAY_PER_REQUEST `
   --region $REGION
 ```
-
-Verify they were created:
-
-```powershell
-aws dynamodb list-tables --region $REGION
-```
-
-Expected result: `["twitter-posts", "twitter-users"]`
-
-> If a table already exists, the command returns `ResourceInUseException`. That is normal; the table is already created and you can continue.
-
+ 
+> If a table already exists, `ResourceInUseException` is returned — that is normal, continue.
+ 
 ---
-
+ 
 ### Step 4 — Build microservices (fat JAR)
-
-Go to the project root and build each microservice:
-
+ 
 ```powershell
 cd microservices\posts-service
-mvn clean package
+mvn clean package -q
 cd ..\..
-
+ 
 cd microservices\users-service
-mvn clean package
+mvn clean package -q
 cd ..\..
-
+ 
 cd microservices\stream-service
-mvn clean package
+mvn clean package -q
 cd ..\..
 ```
-
-Each build must finish with `BUILD SUCCESS`. JARs are generated at:
-
-- `microservices/posts-service/target/posts-service-1.0-SNAPSHOT.jar`
-- `microservices/users-service/target/users-service-1.0-SNAPSHOT.jar`
-- `microservices/stream-service/target/stream-service-1.0-SNAPSHOT.jar`
-
+ 
+Each build must finish with `BUILD SUCCESS`.
+ 
 ---
-
+ 
 ### Step 5 — Create or update Lambdas
-
+ 
 **First time (create):**
-
+ 
 ```powershell
 aws lambda create-function `
   --function-name tweetlite-posts `
@@ -413,7 +380,7 @@ aws lambda create-function `
   --memory-size 512 `
   --environment "Variables={POSTS_TABLE=$POSTS_TABLE,AUTH0_DOMAIN=$AUTH0_DOMAIN,AUTH0_AUDIENCE=$AUTH0_AUDIENCE}" `
   --region $REGION
-
+ 
 aws lambda create-function `
   --function-name tweetlite-users `
   --runtime java17 `
@@ -424,7 +391,7 @@ aws lambda create-function `
   --memory-size 512 `
   --environment "Variables={USERS_TABLE=$USERS_TABLE,AUTH0_DOMAIN=$AUTH0_DOMAIN,AUTH0_AUDIENCE=$AUTH0_AUDIENCE}" `
   --region $REGION
-
+ 
 aws lambda create-function `
   --function-name tweetlite-stream `
   --runtime java17 `
@@ -436,190 +403,186 @@ aws lambda create-function `
   --environment "Variables={POSTS_TABLE=$POSTS_TABLE}" `
   --region $REGION
 ```
-
+ 
 **If Lambdas already exist (update code):**
-
+ 
 ```powershell
 aws lambda update-function-code --function-name tweetlite-posts --zip-file fileb://microservices/posts-service/target/posts-service-1.0-SNAPSHOT.jar --region $REGION
-
+ 
 aws lambda update-function-code --function-name tweetlite-users --zip-file fileb://microservices/users-service/target/users-service-1.0-SNAPSHOT.jar --region $REGION
-
+ 
 aws lambda update-function-code --function-name tweetlite-stream --zip-file fileb://microservices/stream-service/target/stream-service-1.0-SNAPSHOT.jar --region $REGION
 ```
-
+ 
 ---
-
+ 
 ### Step 6 — API Gateway
-
-API Gateway is configured from the AWS web console (more reliable than CLI for this step).
-
-1. Open AWS Console -> search **API Gateway** -> open it
-2. Check whether `tweetlite-api` already exists. If yes, open it. If not, create a new **HTTP API**.
-3. Required routes:
-
+ 
+From the AWS Console -> API Gateway:
+ 
+1. Create a new **HTTP API** named `tweetlite-api`
+2. Create these routes:
 | Method | Route | Lambda |
 |---|---|---|
 | GET | /api/stream | tweetlite-stream |
 | GET | /api/posts | tweetlite-posts |
 | POST | /api/posts | tweetlite-posts |
 | GET | /api/me | tweetlite-users |
-
-4. For each route: click route -> **Attach integration** -> Lambda -> select the corresponding function.
-5. In the left menu -> **CORS** -> configure:
-    - **Allow origins:** `https://tweetlite.duckdns.org`
-    - **Allow headers:** `Content-Type, Authorization`
-    - **Allow methods:** `GET, POST, OPTIONS`
-    - Save
-6. In **Stages** -> verify stage `prod` exists with **Automatic Deployment** enabled.
-
-Base API URL: `https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod`
-
+ 
+3. For each route attach the corresponding Lambda integration and set **Payload format version** to `1.0`
+4. Configure CORS:
+   - **Allow origins:** `https://tweetlite2.duckdns.org`
+   - **Allow headers:** `Content-Type, Authorization`
+   - **Allow methods:** `GET, POST, OPTIONS`
+5. Verify stage `$default` exists with **Auto-deploy** enabled
+Base API URL: `https://678rh58i1c.execute-api.us-east-1.amazonaws.com`
+ 
 > **Note:** JWT validation is done inside each Lambda using `JwtValidator`, so no API Gateway authorizer is required.
-
+ 
 ---
-
+ 
 ### Step 7 — Build and deploy frontend to S3
-
-Create `frontend/.env` with production values:
-
+ 
+Create `frontend/.env`:
+ 
 ```env
-REACT_APP_AUTH0_DOMAIN=dev-wtyv3mytuxckqffv.us.auth0.com
-REACT_APP_AUTH0_CLIENT_ID=Mr2Tjbd41ZOZP5XKfzMwFcqkLncUGnmW
+REACT_APP_AUTH0_DOMAIN=dev-g5mngajmk4cmyq55.us.auth0.com
+REACT_APP_AUTH0_CLIENT_ID=Pgr31dkEknl75t6ndtQHrqhV3dtEsBnG
 REACT_APP_AUTH0_AUDIENCE=https://tweetlite-api
-REACT_APP_API_URL=https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod
+REACT_APP_API_URL=https://678rh58i1c.execute-api.us-east-1.amazonaws.com
 ```
-
+ 
 Build and deploy:
-
+ 
 ```powershell
 cd frontend
 npm install
 npm run build
 cd ..
-
-$BUCKET = "tweetlite-" + $ACCOUNT_ID
-
+ 
 aws s3 mb "s3://$BUCKET" --region $REGION
-
+ 
+aws s3api put-public-access-block `
+  --bucket $BUCKET `
+  --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+ 
+$policyContent = @"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::$BUCKET/*"
+    }
+  ]
+}
+"@
+$policyContent | Out-File -FilePath "bucket-policy.json" -Encoding ascii
+aws s3api put-bucket-policy --bucket $BUCKET --policy file://bucket-policy.json
+ 
 aws s3 website "s3://$BUCKET" --index-document index.html --error-document index.html
-
+ 
 aws s3 sync "frontend/build/" "s3://$BUCKET" --delete
 ```
-
-S3 bucket URL: `http://tweetlite-962733155713.s3-website-us-east-1.amazonaws.com`
-
-> **Known issue:** Auth0 requires HTTPS in production. The S3 website endpoint is HTTP, so Auth0 login fails there. Solution in the next step.
-
+ 
+S3 bucket URL: `http://tweetlite-036549363372.s3-website-us-east-1.amazonaws.com`
+ 
 ---
-
-### Step 8 — HTTPS with EC2 + Caddy + DuckDNS (Plan B without CloudFront)
-
-This step adds HTTPS to the frontend. S3 still serves static files, but EC2 acts as an HTTPS reverse proxy.
-
+ 
+### Step 8 — HTTPS with EC2 + Caddy + DuckDNS
+ 
 #### 8.1 Create domain in DuckDNS
-
-1. Go to https://www.duckdns.org and sign in with Google or GitHub
-2. Create a subdomain, for example `tweetlite`
-3. In **current ip**, enter the EC2 public IP (obtained in the next step)
-4. Click **update ip**
-
-Domain will be: `tweetlite.duckdns.org`
-
+ 
+1. Go to https://www.duckdns.org and sign in
+2. Create subdomain `tweetlite2`
+3. Update IP with the EC2 public IP after launching
+Domain: `tweetlite2.duckdns.org`
+ 
 #### 8.2 Create EC2 (Amazon Linux 2023)
-
-From AWS Console -> EC2 -> **Launch instance**:
-
+ 
+AWS Console -> EC2 -> Launch instance:
+ 
 - **Name:** `tweetlite-proxy`
-- **AMI:** Amazon Linux 2023 AMI (first default option)
+- **AMI:** Amazon Linux 2023
 - **Instance type:** `t2.micro`
-- **Key pair:** lab `.pem` file (download PEM from the lab screen)
-- **Security group:** open ports:
-    - SSH (22) — My IP
-    - HTTP (80) — Anywhere
-    - HTTPS (443) — Anywhere
-
-Launch the instance and copy the **public IP** (e.g. `3.218.72.189`). Update that IP in DuckDNS.
-
+- **Key pair:** create `tweetlite-key` (.pem format)
+- **Security group:** open ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
+Copy the public IP and update DuckDNS.
+ 
 #### 8.3 Connect via SSH
-
+ 
 ```powershell
-ssh -i "C:\Users\USUARIO\Downloads\labsuser.pem" ec2-user@3.218.72.189
+ssh -i "C:\Users\ders1\Downloads\tweetlite-key.pem" ec2-user@<EC2_PUBLIC_IP>
 ```
-
-#### 8.4 Install Caddy (direct binary)
-
+ 
+#### 8.4 Install Caddy
+ 
 ```bash
 curl -fsSL https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz -o caddy.tar.gz
 tar -xzf caddy.tar.gz
 sudo mv caddy /usr/local/bin/
 caddy version
 ```
-
-#### 8.5 Configure Caddy as reverse proxy
-
+ 
+#### 8.5 Configure Caddy
+ 
 ```bash
 sudo mkdir -p /etc/caddy
 sudo nano /etc/caddy/Caddyfile
 ```
-
-Caddyfile content:
-
+ 
 ```
-tweetlite.duckdns.org {
-  reverse_proxy http://tweetlite-962733155713.s3-website-us-east-1.amazonaws.com {
-    header_up Host tweetlite-962733155713.s3-website-us-east-1.amazonaws.com
+tweetlite2.duckdns.org {
+  reverse_proxy http://tweetlite-036549363372.s3-website-us-east-1.amazonaws.com {
+    header_up Host tweetlite-036549363372.s3-website-us-east-1.amazonaws.com
   }
 }
 ```
-
-Save with `Ctrl+X` -> `Y` -> Enter.
-
-Start Caddy:
-
+ 
 ```bash
 sudo caddy start --config /etc/caddy/Caddyfile
 ```
-
-Caddy automatically gets an SSL certificate from Let's Encrypt. Frontend will be available at: `https://tweetlite.duckdns.org`
-
-#### 8.6 Update Auth0 with HTTPS URL
-
-In Auth0 Dashboard -> Applications -> TweetLite Frontend -> Settings:
-
-- **Allowed Callback URLs:** `https://tweetlite.duckdns.org`
-- **Allowed Logout URLs:** `https://tweetlite.duckdns.org`
-- **Allowed Web Origins:** `https://tweetlite.duckdns.org`
-
-Save changes.
-
+ 
 ---
-
+ 
+### Reactivating after lab restart
+ 
+Every time the lab session restarts:
+ 
+1. Update credentials in `$env:USERPROFILE\.aws\credentials`
+2. Redefine PowerShell variables (Step 2)
+3. Start EC2 instance from AWS Console
+4. Update new public IP in DuckDNS
+5. SSH into EC2 and restart Caddy:
+```bash
+ssh -i "C:\Users\ders1\Downloads\tweetlite-key.pem" ec2-user@<NEW_IP>
+sudo caddy start --config /etc/caddy/Caddyfile
+```
+ 
+---
+ 
 ## Functional verification
-
-### Public endpoints (without token)
-
-```bash
-# Should return 200
-curl https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod/api/stream
-curl https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod/api/posts
+ 
+```powershell
+# Public endpoints — should return 200
+curl https://678rh58i1c.execute-api.us-east-1.amazonaws.com/api/stream
+curl https://678rh58i1c.execute-api.us-east-1.amazonaws.com/api/posts
+ 
+# Protected endpoints without token — should return 401
+curl -X POST https://678rh58i1c.execute-api.us-east-1.amazonaws.com/api/posts
+curl https://678rh58i1c.execute-api.us-east-1.amazonaws.com/api/me
 ```
-
-### Protected endpoints (without token)
-
-```bash
-# Should return 401
-curl -X POST https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod/api/posts
-curl https://m4ro71bgz4.execute-api.us-east-1.amazonaws.com/prod/api/me
-```
-
-### Frontend
-
-1. Open `https://tweetlite.duckdns.org`
+ 
+Frontend verification:
+1. Open `https://tweetlite2.duckdns.org`
 2. Click **Sign In** -> redirected to Auth0 -> sign in
 3. View public posts feed
 4. Publish a new post (max 140 characters)
 5. Verify the post appears in the feed
-
+---
 ### Swagger (local monolith)
 
 1. Start the monolith locally (see local run section)
