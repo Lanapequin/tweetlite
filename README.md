@@ -596,7 +596,8 @@ Frontend verification:
 ---
 ## General deployment + DuckDNS test
 
-![alt text](images\pruebaDespliegue.png)
+<img width="1886" height="986" alt="image" src="https://github.com/user-attachments/assets/d87c659b-e5c1-400c-bdd0-fd5009baf52a" />
+
 
 
 
