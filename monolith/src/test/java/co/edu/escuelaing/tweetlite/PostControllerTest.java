@@ -2,6 +2,7 @@ package co.edu.escuelaing.tweetlite;
 
 import co.edu.escuelaing.tweetlite.dto.PostRequest;
 import co.edu.escuelaing.tweetlite.dto.PostResponse;
+import co.edu.escuelaing.tweetlite.model.User;
 import co.edu.escuelaing.tweetlite.service.PostService;
 import co.edu.escuelaing.tweetlite.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -32,6 +34,13 @@ class PostControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    /**
+     * Evita que {@code SecurityConfig} cree un {@link JwtDecoder} que llama a Auth0 al arrancar el contexto.
+     * Las peticiones autenticadas en estos tests usan {@code with(jwt(...))}, no el decoder real.
+     */
+    @MockBean
+    private JwtDecoder jwtDecoder;
 
     @MockBean
     private PostService postService;
@@ -82,7 +91,12 @@ class PostControllerTest {
         response.setContent(request.getContent());
         response.setCreatedAt(LocalDateTime.now());
 
-        when(userService.getOrCreateUser(any(Jwt.class))).thenReturn(null);
+        User author = new User();
+        author.setId(1L);
+        author.setAuth0Id("auth0|123");
+        author.setEmail("test@test.com");
+        author.setName("Test User");
+        when(userService.getOrCreateUser(any(Jwt.class))).thenReturn(author);
         when(postService.createPost(any(), any())).thenReturn(response);
 
         mockMvc.perform(post("/api/posts")
@@ -113,13 +127,25 @@ class PostControllerTest {
 
     @Test
     void getMe_WithAuth_ShouldReturnUserInfo() throws Exception {
+        User user = new User();
+        user.setId(1L);
+        user.setAuth0Id("auth0|123");
+        user.setEmail("test@test.com");
+        user.setName("Test User");
+        user.setPicture("https://example.com/avatar.png");
+        user.setCreatedAt(LocalDateTime.now());
+        when(userService.getOrCreateUser(any(Jwt.class))).thenReturn(user);
+
         mockMvc.perform(get("/api/me")
                         .with(jwt().jwt(j -> j
                                 .subject("auth0|123")
                                 .claim("email", "test@test.com")
                                 .claim("name", "Test User")
                                 .audience(List.of("YOUR_AUTH0_AUDIENCE")))))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("test@test.com"))
+                .andExpect(jsonPath("$.name").value("Test User"))
+                .andExpect(jsonPath("$.auth0Id").value("auth0|123"));
     }
 
     @Test

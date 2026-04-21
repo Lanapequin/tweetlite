@@ -93,13 +93,19 @@ public class PostsHandler implements RequestHandler<APIGatewayProxyRequestEvent,
         // Save to DynamoDB
         String id = UUID.randomUUID().toString();
         String now = Instant.now().toString();
+        String authorName = claims.getOrDefault("name", "User");
+        if (authorName == null || authorName.isBlank()) authorName = "User";
+        String authorEmail = claims.getOrDefault("email", "no-email@unknown.com");
+        if (authorEmail == null || authorEmail.isBlank()) authorEmail = "no-email@unknown.com";
+        String authorId = claims.getOrDefault("sub", id);
+        if (authorId == null || authorId.isBlank()) authorId = id;
 
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("id", AttributeValue.builder().s(id).build());
         item.put("content", AttributeValue.builder().s(content).build());
-        item.put("authorName", AttributeValue.builder().s(claims.getOrDefault("name", "User")).build());
-        item.put("authorEmail", AttributeValue.builder().s(claims.getOrDefault("email", "")).build());
-        item.put("authorId", AttributeValue.builder().s(claims.get("sub")).build());
+        item.put("authorName", AttributeValue.builder().s(authorName).build());
+        item.put("authorEmail", AttributeValue.builder().s(authorEmail).build());
+        item.put("authorId", AttributeValue.builder().s(authorId).build());
         item.put("createdAt", AttributeValue.builder().s(now).build());
 
         dynamoDb.putItem(PutItemRequest.builder().tableName(TABLE).item(item).build());
