@@ -634,4 +634,4 @@ Each microservice includes its own `JwtValidator` that validates JWT directly ag
 
 ## Demo video
 
-- Video link: 
+- Video link: https://youtu.be/hJIgbn5XFLg
